@@ -4,7 +4,6 @@ import core.gui.HOMainFrame;
 import core.model.HOVerwaltung;
 import module.teamAnalyzer.vo.MatchRating;
 
-import java.util.HashMap;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
