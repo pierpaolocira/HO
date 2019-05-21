@@ -54,6 +54,23 @@ public class MatchRating {
 
     //~ Methods ------------------------------------------------------------------------------------
 
+    public MatchRating minus(MatchRating other)
+    {
+        if (null == other) return this;
+
+        MatchRating diff = new MatchRating();
+        diff.setCentralDefense(this.getCentralDefense()-other.getCentralDefense());
+        diff.setRightDefense(this.getRightDefense()-other.getRightDefense());
+        diff.setLeftDefense(this.getLeftDefense()-other.getLeftDefense());
+        diff.setMidfield(this.getMidfield()-other.getMidfield());
+        diff.setCentralAttack(this.getCentralAttack()-other.getCentralAttack());
+        diff.setRightAttack(this.getRightAttack()-other.getRightAttack());
+        diff.setLeftAttack(this.getLeftAttack()-other.getLeftAttack());
+        diff.setHatStats(this.getHatStats()-other.getHatStats());
+        diff.setLoddarStats(this.getLoddarStats()-other.getLoddarStats());
+
+        return diff;
+    }
     /**
      * Sets the central attack rating
      *

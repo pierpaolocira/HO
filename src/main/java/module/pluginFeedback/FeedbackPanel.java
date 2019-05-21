@@ -1,16 +1,52 @@
 package module.pluginFeedback;
 
+import core.model.HOVerwaltung;
+import core.model.Ratings;
+import core.model.player.IMatchRoleID;
+import module.lineup.Lineup;
+import module.lineup.RatingComparisonPanel;
+import module.teamAnalyzer.vo.MatchRating;
+
 import javax.swing.*;
 import java.awt.*;
+
 
 public class FeedbackPanel extends JFrame{
 
     GridBagLayout layout;
     JLabel lineupRecommendation;
+    JLabel GK, WBr;
     JTextArea jtaCopyPaste;
+    JButton jbRefresh, jbSend;
 
     public FeedbackPanel() {
         initComponents();
+    }
+
+
+    private void refresh() {
+
+        Lineup lineup = HOVerwaltung.instance().getModel().getLineup();
+
+        GK.setText(lineup.getPlayerByPositionID(IMatchRoleID.keeper).getLastName());
+        WBr.setText(lineup.getPlayerByPositionID(IMatchRoleID.rightBack).getLastName());
+
+
+        Ratings oRatings = lineup.getRatings();
+
+        double LD = oRatings.getLeftDefense().get(0);
+        double CD = oRatings.getCentralDefense().get(0);
+        double RD = oRatings.getRightDefense().get(0);
+        double MF = oRatings.getMidfield().get(0);
+        double LA = oRatings.getLeftAttack().get(0);
+        double CA = oRatings.getCentralAttack().get(0);
+        double RA = oRatings.getRightAttack().get(0);
+
+        MatchRating mrHOPredictionRating = new MatchRating(LD, CD, RD, MF, LA, CA, RA, 0, 0);
+        MatchRating mrHTmatchRating = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0); //FIXME
+
+        RatingComparisonPanel HOPredictionRating = new RatingComparisonPanel("HO", mrHOPredictionRating);
+
     }
 
     private void initComponents() {
@@ -28,7 +64,7 @@ public class FeedbackPanel extends JFrame{
         gbc.gridwidth = 5;
         gbc.gridx = 0;
         gbc.gridy = 0;
-        lineupRecommendation = new JLabel("<html><font color='red' font-weight='bold'>1.</font> Please set the <b>same lineup both in HO and in HT</b>, as per the following recommendation:</html>");
+        lineupRecommendation = new JLabel("<html><font color='red' weight='bold'>1.</font> Please set the <b>same lineup both in HO and in HT</b>, as per the following recommendation:</html>");
         this.add(lineupRecommendation, gbc);
         // ==========================================================================================
 
@@ -40,7 +76,7 @@ public class FeedbackPanel extends JFrame{
         gbc.weightx = 1;
         gbc.gridx = 2;
         gbc.gridy = 1;
-        JLabel GK = new JLabel("GK", JLabel.CENTER);
+        GK = new JLabel("GK", JLabel.CENTER);
         GK.setOpaque(true);
         GK.setBackground(Color.WHITE);
         GK.setForeground(Color.BLACK);
@@ -50,7 +86,7 @@ public class FeedbackPanel extends JFrame{
         gbc.insets = new Insets(5,5,5,5);  //top padding
         gbc.gridx = 0;
         gbc.gridy = 2;
-        JLabel WBr = new JLabel("WB", JLabel.CENTER);
+        WBr = new JLabel("WB", JLabel.CENTER);
         WBr.setOpaque(true);
         WBr.setBackground(Color.WHITE);
         WBr.setForeground(Color.GRAY);
@@ -167,18 +203,18 @@ public class FeedbackPanel extends JFrame{
         this.add(FWl, gbc);
         // ==========================================================================================
 
-        // Copy Paste Area =====================================================================
+        // ========================================================================
         gbc.fill =  GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(30,5,0,5);
         gbc.gridwidth = 5;
         gbc.gridx = 0;
         gbc.gridy = 5;
-        lineupRecommendation = new JLabel("<html><font color='red' font-weight='bold'>2.</font> Paste the prediction ratings provided by HT</html>");
+        lineupRecommendation = new JLabel("<html><font color='red' weight='bold'>2.</font> Paste the prediction ratings provided by HT</html>");
         this.add(lineupRecommendation, gbc);
         // ==========================================================================================
 
         // Copy Paste Area  ==========================================================================
-        gbc.fill =  GridBagConstraints.HORIZONTAL;
+//        gbc.fill =  GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10,5,0,10);
         gbc.gridwidth = 5;
         gbc.ipadx = 0;
@@ -192,42 +228,52 @@ public class FeedbackPanel extends JFrame{
         jtaCopyPaste.setWrapStyleWord(true);
         JScrollPane areaScrollPane = new JScrollPane(jtaCopyPaste);
         areaScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-//        areaScrollPane.setSize(new Dimension(380, 100));
         this.add(areaScrollPane, gbc);
-        // ==========================================================================================
 
-//
-//        gbc.gridx = 1;
-//        gbc.gridy = 1;
-//        this.add(new Button("Button Four"), gbc);
-//        gbc.gridx = 0;
-//        gbc.gridy = 2;
-//        gbc.fill = GridBagConstraints.HORIZONTAL;
-//        gbc.gridwidth = 2;
-//        this.add(new Button("Button Five"), gbc);
-        setSize(400, 600);
+        // ================ PREDICTION RATING  =========================================================================
+        gbc.gridx = 0;
+        gbc.gridy = 7;
+
+        MatchRating mrHOPredictionRating = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        RatingComparisonPanel HOPredictionRating = new RatingComparisonPanel("HO", mrHOPredictionRating);
+
+        MatchRating mrHTmatchRating = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        RatingComparisonPanel HTPredictionRating = new RatingComparisonPanel("HT", mrHTmatchRating);
+
+        RatingComparisonPanel DeltaPredictionRating = new RatingComparisonPanel("Delta", mrHOPredictionRating.minus(mrHTmatchRating));
+//        this.add(DeltaPredictionRating, gbc);
+
+        JPanel content = new JPanel();
+        content.add(HOPredictionRating);
+        content.add(HTPredictionRating);
+        content.add(DeltaPredictionRating);
+
+//        JFrame f = new RatingComparisonDialog(mrHOPredictionRating, mrHTmatchRating);
+        this.add(content, gbc);
+
+        // =================BUTTONS    ===============================================================================================
+
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(0,5,10,5);
+        gbc.ipady = 0;
+        gbc.gridx = 1;
+        gbc.gridy = 8;
+        jbRefresh =new JButton("Refresh");
+        jbRefresh.addActionListener(e -> refresh());
+        this.add(jbRefresh, gbc);
+
+        gbc.gridx = 3;
+        jbSend =new JButton("Send");
+//        jbSend.addActionListener(e -> sendToserver()); //TODO: create the function sendToserver
+        this.add(jbSend, gbc);
+
+        setSize(900, 800);
         setPreferredSize(getSize());
         setResizable(false);
         setVisible(true);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
 
-
-//
-//        lineupRecommendation.setBounds(50, 50, 100, 30);
-////        JButton b=new JButton("click");//creating instance of JButton
-////        b.setBounds(130,100,100, 40);//x axis, y axis, width, height
-//
-
-//        jtaCopyPaste.setBounds(50,200, 200,200);
-//
-//        f.add(lineupRecommendation);//adding button in JFrame
-//        f.add(jtaCopyPaste);//adding button in JFrame
-//
-//        f.setSize(600,600);
-//        f.setLayout(null);//using no layout managers
-//        f.setVisible(true);//making the frame visible
-//        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }
 
 }
