@@ -1,5 +1,6 @@
 package module.pluginFeedback;
 
+import com.google.gson.Gson;
 import core.model.HOVerwaltung;
 import core.model.Ratings;
 import core.model.player.IMatchRoleID;
@@ -9,6 +10,11 @@ import module.teamAnalyzer.vo.MatchRating;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.BufferedReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Arrays;
+import java.util.HashMap;
 
 
 public class FeedbackPanel extends JFrame{
@@ -18,20 +24,94 @@ public class FeedbackPanel extends JFrame{
     JLabel GK, WBr;
     JTextArea jtaCopyPaste;
     JButton jbRefresh, jbSend;
+    HashMap<Integer, Byte> requiredLineup = new HashMap<>();
 
     public FeedbackPanel() {
+        fetchRequiredLineup();
         initComponents();
     }
 
 
+    private void sendToserver() {
+//
+//            simpleLineup lineup = new simpleLineup();
+//            lineup.addPlayer(100, (byte)0);
+//            lineup.addPlayer(110, (byte)10);
+//            GsonBuilder builder = new GsonBuilder();
+//            Gson gson = builder.setPrettyPrinting().create();
+//            System.out.println(gson.toJson(lineup));
+
+        fetchRequiredLineup();
+    }
+
+
+    private void fetchRequiredLineup() {
+
+            try {
+                URL url = new URL("https://akasolace.github.io/HO/feedback.json");
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.connect();
+                BufferedReader json = new BufferedReader(new java.io.InputStreamReader(connection.getInputStream()));
+                SimpleLineup temp =  new Gson().fromJson(json, SimpleLineup.class);
+                requiredLineup = temp.lineup;
+            }
+
+            catch (Exception e)
+        {
+            String message = HOVerwaltung.instance().getLanguageString("feedbackplugin.fetcRequiredLineupError");
+            JOptionPane.showMessageDialog(null, message, "", JOptionPane.ERROR_MESSAGE);
+
+            System.out.println(e.toString());
+        }
+
+    }
+
+
+    private void formatPlayerBox(JLabel jl, String pos, Byte order) // TODO treat the order, make it visible somehow in the box
+    {
+        if(order != null) {
+            String s_order = pos;
+            jl.setBackground(Color.WHITE);
+            jl.setForeground(Color.BLACK);
+            jl.setBorder(BorderFactory.createLineBorder(Color.GREEN, 2));
+
+            java.util.List<String> righSide = Arrays.asList("WBr", "CDr", "WIr", "IMr", "FWr");
+            java.util.List<String> leftSideAllowedTW = Arrays.asList("WBl", "CDl", "FWl");
+            java.util.List<String> rightSideAllowedTM = Arrays.asList("WBr", "WIr");
+
+            String right_arrow = "\uD83E\uDC46"; //u'RIGHTWARDS HEAVY ARROW'
+            String down_arrow = "\uD83E\uDC47"; //u'DOWNWARDS HEAVY ARROW'
+
+            switch(order) {
+                case IMatchRoleID.NORMAL:
+                    s_order += " \uD83E\uDC47";  //u'DOWNWARDS HEAVY ARROW'
+                    break;
+                case IMatchRoleID.OFFENSIVE:
+                    s_order += " \uD83E\uDC47";  //u'DOWNWARDS HEAVY ARROW'
+                    break;
+                case IMatchRoleID.DEFENSIVE:
+                    s_order += " \uD83E\uDC47";  //u'DOWNWARDS HEAVY ARROW'
+                    break;
+                case IMatchRoleID.TOWARDS_WING:
+                    if (leftSideAllowedTW.contains(pos)){s_order += " (TW) " + right_arrow;}
+                    break;
+                case IMatchRoleID.TOWARDS_MIDDLE:
+                    if (rightSideAllowedTM.contains(pos)){s_order += " (TM) " + right_arrow;}
+                    break;
+            }
+            jl.setText(s_order);
+        }
+
+    }
+
     private void refresh() {
 
+//        requiredLineup.forEach((key,value) -> System.out.println(key + " = " + value));
+
+//
+
         Lineup lineup = HOVerwaltung.instance().getModel().getLineup();
-
-        GK.setText(lineup.getPlayerByPositionID(IMatchRoleID.keeper).getLastName());
-        WBr.setText(lineup.getPlayerByPositionID(IMatchRoleID.rightBack).getLastName());
-
-
         Ratings oRatings = lineup.getRatings();
 
         double LD = oRatings.getLeftDefense().get(0);
@@ -79,8 +159,9 @@ public class FeedbackPanel extends JFrame{
         GK = new JLabel("GK", JLabel.CENTER);
         GK.setOpaque(true);
         GK.setBackground(Color.WHITE);
-        GK.setForeground(Color.BLACK);
-        GK.setBorder(BorderFactory.createLineBorder(Color.GREEN, 2));
+        GK.setForeground(Color.GRAY);
+        GK.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(GK, "GK", requiredLineup.get(IMatchRoleID.keeper));
         this.add(GK, gbc);
         // WBr ======================================================================
         gbc.insets = new Insets(5,5,5,5);  //top padding
@@ -91,6 +172,7 @@ public class FeedbackPanel extends JFrame{
         WBr.setBackground(Color.WHITE);
         WBr.setForeground(Color.GRAY);
         WBr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(WBr, "WBr", requiredLineup.get(IMatchRoleID.rightBack));
         this.add(WBr, gbc);
         // CDr ======================================================================
         gbc.gridx = 1;
@@ -264,7 +346,7 @@ public class FeedbackPanel extends JFrame{
 
         gbc.gridx = 3;
         jbSend =new JButton("Send");
-//        jbSend.addActionListener(e -> sendToserver()); //TODO: create the function sendToserver
+        jbSend.addActionListener(e -> sendToserver()); //TODO: create the function sendToserver
         this.add(jbSend, gbc);
 
         setSize(900, 800);
@@ -276,4 +358,22 @@ public class FeedbackPanel extends JFrame{
 
     }
 
+    private class SimpleLineup {
+
+        HashMap<Integer, Byte> lineup;
+
+        public SimpleLineup(HashMap<Integer, Byte> _lineup){
+            lineup = _lineup;
+        }
+
+        public SimpleLineup(){
+            lineup = new HashMap<> ();
+        }
+
+        public void addPlayer(int position, byte _matchOrder){
+            lineup.put(position, _matchOrder);
+        }
+
+
+    }
 }
