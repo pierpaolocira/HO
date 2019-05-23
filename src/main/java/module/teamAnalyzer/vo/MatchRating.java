@@ -1,4 +1,5 @@
 package module.teamAnalyzer.vo;
+import core.model.Ratings;
 import core.model.match.IMatchDetails;
 import core.model.match.Matchdetails;
 
@@ -50,6 +51,18 @@ public class MatchRating {
         this.tacticType = tacticType;
         HatStats = (midfield * 3) + leftAttack + rightAttack + centralAttack + centralDefense + leftDefense + rightDefense;
         LoddarStat = computeLoddarStats(tacticType, tacticSkill);
+    }
+
+    public MatchRating(Ratings ratings) {
+        this.centralAttack = ratings.getCentralAttack().get(0);
+        this.centralDefense = ratings.getCentralDefense().get(0);
+        this.leftAttack = ratings.getLeftAttack().get(0);
+        this.leftDefense = ratings.getLeftDefense().get(0);
+        this.midfield = ratings.getMidfield().get(0);
+        this.rightAttack = ratings.getRightAttack().get(0);
+        this.rightDefense = ratings.getRightDefense().get(0);
+        this.HatStats = ratings.getHatStats().get(0);
+        this.LoddarStat = ratings.getLoddarStat().get(0);
     }
 
     //~ Methods ------------------------------------------------------------------------------------

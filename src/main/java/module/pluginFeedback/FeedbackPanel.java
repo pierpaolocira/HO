@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import core.model.HOVerwaltung;
 import core.model.Ratings;
 import core.model.player.IMatchRoleID;
+import core.model.player.MatchRoleID;
 import module.lineup.Lineup;
 import module.lineup.RatingComparisonPanel;
 import module.teamAnalyzer.vo.MatchRating;
@@ -11,10 +12,12 @@ import module.teamAnalyzer.vo.MatchRating;
 import javax.swing.*;
 import java.awt.*;
 import java.io.BufferedReader;
+import java.io.FileReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 
 
 public class FeedbackPanel extends JFrame{
@@ -24,45 +27,78 @@ public class FeedbackPanel extends JFrame{
     JLabel GK, WBr;
     JTextArea jtaCopyPaste;
     JButton jbRefresh, jbSend;
-    HashMap<Integer, Byte> requiredLineup = new HashMap<>();
+    Map<Integer, Byte> requiredLineup = new HashMap<>();
+    Lineup HOLineup;
+    Ratings HORatings;
+    MatchRating HTRatings;
+    Boolean bFetchLineupSuccess;
+    Boolean isHOLineupValid = false;
+    RatingComparisonPanel HOPredictionRating, HTPredictionRating, DeltaPredictionRating;
 
     public FeedbackPanel() {
-        fetchRequiredLineup();
+        HORatings = HOVerwaltung.instance().getModel().getLineup().getRatings();
+        HOLineup = HOVerwaltung.instance().getModel().getLineup();
+
+        bFetchLineupSuccess = fetchRequiredLineup();
+        if (bFetchLineupSuccess) isHOLineupValid = checkHOLineup();
         initComponents();
+        refresh();
     }
 
 
-    private void sendToserver() {
-//
-//            simpleLineup lineup = new simpleLineup();
-//            lineup.addPlayer(100, (byte)0);
-//            lineup.addPlayer(110, (byte)10);
-//            GsonBuilder builder = new GsonBuilder();
-//            Gson gson = builder.setPrettyPrinting().create();
-//            System.out.println(gson.toJson(lineup));
+    private boolean checkHOLineup(){
+        int positionHO, orderHO;
+        boolean isAligned, positionIsRequired;
 
-        fetchRequiredLineup();
+        // return false if HOLineup not fully included in required Lineup
+        for (IMatchRoleID obj: HOLineup.getPositionen()) {
+            positionHO = ((MatchRoleID) obj).getId();
+            orderHO = ((MatchRoleID) obj).getTaktik();
+            isAligned = (((MatchRoleID) obj).getSpielerId() != 0 ) && IMatchRoleID.aFieldMatchRoleID.contains(positionHO);
+
+
+            if (isAligned)
+            {
+                positionIsRequired = requiredLineup.containsKey(positionHO);
+                if(!positionIsRequired) return false; // Player in the lineup at a position not listed in the requirements
+                if(requiredLineup.get(positionHO) != orderHO) return false; // Player has incorrect orders
+            }
+            }
+
+        // return false if required Lineup not fully included in HO Lineup
+        for (Map.Entry<Integer, Byte> entry : requiredLineup.entrySet()) {
+            HOLineup.getPositionById(entry.getKey()).getTaktik();
+            if( (HOLineup.getPositionById(entry.getKey()).getTaktik() != entry.getValue()) ) return false;
+        }
+
+        return true;
     }
 
 
-    private void fetchRequiredLineup() {
+    private void sendToServer() { // TODO: to be implemented
+
+    }
+
+
+    private boolean fetchRequiredLineup() {
 
             try {
                 URL url = new URL("https://akasolace.github.io/HO/feedback.json");
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
                 connection.connect();
-                BufferedReader json = new BufferedReader(new java.io.InputStreamReader(connection.getInputStream()));
+//                BufferedReader json = new BufferedReader(new java.io.InputStreamReader(connection.getInputStream()));
+                BufferedReader json = new BufferedReader(new FileReader("D:\\Temp\\feedback.json"));
                 SimpleLineup temp =  new Gson().fromJson(json, SimpleLineup.class);
                 requiredLineup = temp.lineup;
+                return true;
             }
 
             catch (Exception e)
         {
             String message = HOVerwaltung.instance().getLanguageString("feedbackplugin.fetcRequiredLineupError");
             JOptionPane.showMessageDialog(null, message, "", JOptionPane.ERROR_MESSAGE);
-
-            System.out.println(e.toString());
+            return false;
         }
 
     }
@@ -77,27 +113,28 @@ public class FeedbackPanel extends JFrame{
             jl.setBorder(BorderFactory.createLineBorder(Color.GREEN, 2));
 
             java.util.List<String> righSide = Arrays.asList("WBr", "CDr", "WIr", "IMr", "FWr");
-            java.util.List<String> leftSideAllowedTW = Arrays.asList("WBl", "CDl", "FWl");
-            java.util.List<String> rightSideAllowedTM = Arrays.asList("WBr", "WIr");
 
-            String right_arrow = "\uD83E\uDC46"; //u'RIGHTWARDS HEAVY ARROW'
-            String down_arrow = "\uD83E\uDC47"; //u'DOWNWARDS HEAVY ARROW'
+            String right_arrow = "\uD83E\uDC7A";
+            String left_arrow = "\uD83E\uDC78";
+            String up_arrow = "\uD83E\uDC79";
+            String down_arrow = "\uD83E\uDC7B";
 
             switch(order) {
                 case IMatchRoleID.NORMAL:
-                    s_order += " \uD83E\uDC47";  //u'DOWNWARDS HEAVY ARROW'
                     break;
                 case IMatchRoleID.OFFENSIVE:
-                    s_order += " \uD83E\uDC47";  //u'DOWNWARDS HEAVY ARROW'
+                    s_order += " (OFF) " + down_arrow;
                     break;
                 case IMatchRoleID.DEFENSIVE:
-                    s_order += " \uD83E\uDC47";  //u'DOWNWARDS HEAVY ARROW'
+                    s_order += " (DEF) " + up_arrow;
                     break;
                 case IMatchRoleID.TOWARDS_WING:
-                    if (leftSideAllowedTW.contains(pos)){s_order += " (TW) " + right_arrow;}
+                    if (righSide.contains(pos)){s_order = left_arrow + " " + s_order + " (TW)";}
+                    else {s_order = s_order + " (TW) " + right_arrow;}
                     break;
                 case IMatchRoleID.TOWARDS_MIDDLE:
-                    if (rightSideAllowedTM.contains(pos)){s_order += " (TM) " + right_arrow;}
+                    if (! righSide.contains(pos)){s_order = left_arrow + " " + s_order + " (TM)";}
+                    else {s_order = s_order + " (TW) " + right_arrow;}
                     break;
             }
             jl.setText(s_order);
@@ -105,42 +142,78 @@ public class FeedbackPanel extends JFrame{
 
     }
 
+
+    private void formatSendButton()
+    {
+        if (isHOLineupValid) {
+            jbSend.setEnabled(true);
+            jbSend.setToolTipText(HOVerwaltung.instance().getLanguageString("feedbackplugin.jbSendActivated"));
+        }
+        else {
+            jbSend.setEnabled(false);
+            jbSend.setToolTipText(HOVerwaltung.instance().getLanguageString("feedbackplugin.jbSendDeactivated"));
+        }
+    }
+
+    private void refreshRatingComparisonPanel()
+    {
+        HOPredictionRating.refresh();
+        HTPredictionRating.refresh();
+        DeltaPredictionRating.refresh();
+    }
+
     private void refresh() {
+
+        // Refresh HO Lineup and ratings
+        HORatings = HOVerwaltung.instance().getModel().getLineup().getRatings();
+        HOLineup = HOVerwaltung.instance().getModel().getLineup();
+
+        // TODO: Parse HT Rating
+        HTRatings = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+        if (bFetchLineupSuccess) {
+            isHOLineupValid = checkHOLineup();
+            formatSendButton();
+        }
+
+        HOPredictionRating.setMatchRating(HORatings);
+        HTPredictionRating.setMatchRating(HTRatings);
+        DeltaPredictionRating.setMatchRating(HOPredictionRating.getMatchRating().minus(HTPredictionRating.getMatchRating()));
+        refreshRatingComparisonPanel();
+
+
 
 //        requiredLineup.forEach((key,value) -> System.out.println(key + " = " + value));
 
 //
 
-        Lineup lineup = HOVerwaltung.instance().getModel().getLineup();
-        Ratings oRatings = lineup.getRatings();
 
-        double LD = oRatings.getLeftDefense().get(0);
-        double CD = oRatings.getCentralDefense().get(0);
-        double RD = oRatings.getRightDefense().get(0);
-        double MF = oRatings.getMidfield().get(0);
-        double LA = oRatings.getLeftAttack().get(0);
-        double CA = oRatings.getCentralAttack().get(0);
-        double RA = oRatings.getRightAttack().get(0);
 
-        MatchRating mrHOPredictionRating = new MatchRating(LD, CD, RD, MF, LA, CA, RA, 0, 0);
-        MatchRating mrHTmatchRating = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0); //FIXME
-
-        RatingComparisonPanel HOPredictionRating = new RatingComparisonPanel("HO", mrHOPredictionRating);
+//        double LD = oRatings.getLeftDefense().get(0);
+//        double CD = oRatings.getCentralDefense().get(0);
+//        double RD = oRatings.getRightDefense().get(0);
+//        double MF = oRatings.getMidfield().get(0);
+//        double LA = oRatings.getLeftAttack().get(0);
+//        double CA = oRatings.getCentralAttack().get(0);
+//        double RA = oRatings.getRightAttack().get(0);
+//
+//        MatchRating mrHOPredictionRating = new MatchRating(LD, CD, RD, MF, LA, CA, RA, 0, 0);
+//        MatchRating mrHTmatchRating = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0); //FIXME
+//
+//        RatingComparisonPanel HOPredictionRating = new RatingComparisonPanel("HO", mrHOPredictionRating);
 
     }
 
     private void initComponents() {
 
-//        grid = new GridBagLayout();
         GridBagConstraints gbc = new GridBagConstraints();
-//        setLayout(grid);
         setTitle("Feedback Plugin");
         layout = new GridBagLayout();
         this.setLayout(layout);
 
         // Lineup recommendation =====================================================================
-        gbc.fill =  GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(0,5,0,5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(0, 5, 0, 5);
         gbc.gridwidth = 5;
         gbc.gridx = 0;
         gbc.gridy = 0;
@@ -150,7 +223,7 @@ public class FeedbackPanel extends JFrame{
 
         // Lineup ======================================================================
         // GK ======================================================================
-        gbc.insets = new Insets(15,5,5,5);  //top padding
+        gbc.insets = new Insets(15, 5, 5, 5);  //top padding
         gbc.gridwidth = 1;
         gbc.ipadx = 10;
         gbc.weightx = 1;
@@ -164,10 +237,10 @@ public class FeedbackPanel extends JFrame{
         formatPlayerBox(GK, "GK", requiredLineup.get(IMatchRoleID.keeper));
         this.add(GK, gbc);
         // WBr ======================================================================
-        gbc.insets = new Insets(5,5,5,5);  //top padding
+        gbc.insets = new Insets(5, 5, 5, 5);  //top padding
         gbc.gridx = 0;
         gbc.gridy = 2;
-        WBr = new JLabel("WB", JLabel.CENTER);
+        WBr = new JLabel("WBr", JLabel.CENTER);
         WBr.setOpaque(true);
         WBr.setBackground(Color.WHITE);
         WBr.setForeground(Color.GRAY);
@@ -177,11 +250,12 @@ public class FeedbackPanel extends JFrame{
         // CDr ======================================================================
         gbc.gridx = 1;
         gbc.gridy = 2;
-        JLabel CDr = new JLabel("CD", JLabel.CENTER);
+        JLabel CDr = new JLabel("CDr", JLabel.CENTER);
         CDr.setOpaque(true);
         CDr.setBackground(Color.WHITE);
         CDr.setForeground(Color.GRAY);
         CDr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(CDr, "CDr", requiredLineup.get(IMatchRoleID.rightCentralDefender));
         this.add(CDr, gbc);
         // CDc ======================================================================
         gbc.gridx = 2;
@@ -191,43 +265,48 @@ public class FeedbackPanel extends JFrame{
         CDc.setBackground(Color.WHITE);
         CDc.setForeground(Color.GRAY);
         CDc.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(CDc, "CD", requiredLineup.get(IMatchRoleID.middleCentralDefender));
         this.add(CDc, gbc);
         // CDl ======================================================================
         gbc.gridx = 3;
         gbc.gridy = 2;
-        JLabel CDl = new JLabel("CD", JLabel.CENTER);
+        JLabel CDl = new JLabel("CDl", JLabel.CENTER);
         CDl.setOpaque(true);
         CDl.setBackground(Color.WHITE);
         CDl.setForeground(Color.GRAY);
         CDl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(CDl, "CDl", requiredLineup.get(IMatchRoleID.leftCentralDefender));
         this.add(CDl, gbc);
         // WBl ======================================================================
         gbc.gridx = 4;
         gbc.gridy = 2;
-        JLabel WBl = new JLabel("WB", JLabel.CENTER);
+        JLabel WBl = new JLabel("WBl", JLabel.CENTER);
         WBl.setOpaque(true);
         WBl.setBackground(Color.WHITE);
         WBl.setForeground(Color.GRAY);
         WBl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(WBl, "WBl", requiredLineup.get(IMatchRoleID.leftBack));
         this.add(WBl, gbc);
         // WIr ======================================================================
-        gbc.insets = new Insets(5,5,5,5);  //top padding
+        gbc.insets = new Insets(5, 5, 5, 5);  //top padding
         gbc.gridx = 0;
         gbc.gridy = 3;
-        JLabel WIr = new JLabel("WI", JLabel.CENTER);
+        JLabel WIr = new JLabel("WIr", JLabel.CENTER);
         WIr.setOpaque(true);
         WIr.setBackground(Color.WHITE);
         WIr.setForeground(Color.GRAY);
         WIr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(WIr, "WIr", requiredLineup.get(IMatchRoleID.rightWinger));
         this.add(WIr, gbc);
         // IMr ======================================================================
         gbc.gridx = 1;
         gbc.gridy = 3;
-        JLabel IMr = new JLabel("IM", JLabel.CENTER);
+        JLabel IMr = new JLabel("IMr", JLabel.CENTER);
         IMr.setOpaque(true);
         IMr.setBackground(Color.WHITE);
         IMr.setForeground(Color.GRAY);
         IMr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(IMr, "IMr", requiredLineup.get(IMatchRoleID.rightInnerMidfield));
         this.add(IMr, gbc);
         // IMc ======================================================================
         gbc.gridx = 2;
@@ -237,33 +316,37 @@ public class FeedbackPanel extends JFrame{
         IMc.setBackground(Color.WHITE);
         IMc.setForeground(Color.GRAY);
         IMc.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(IMc, "IM", requiredLineup.get(IMatchRoleID.centralInnerMidfield));
         this.add(IMc, gbc);
         // IMl ======================================================================
         gbc.gridx = 3;
         gbc.gridy = 3;
-        JLabel IMl = new JLabel("IM", JLabel.CENTER);
+        JLabel IMl = new JLabel("IMl", JLabel.CENTER);
         IMl.setOpaque(true);
         IMl.setBackground(Color.WHITE);
         IMl.setForeground(Color.GRAY);
         IMl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(IMl, "IMl", requiredLineup.get(IMatchRoleID.leftInnerMidfield));
         this.add(IMl, gbc);
         // WIl ======================================================================
         gbc.gridx = 4;
         gbc.gridy = 3;
-        JLabel WIl = new JLabel("WI", JLabel.CENTER);
+        JLabel WIl = new JLabel("WIl", JLabel.CENTER);
         WIl.setOpaque(true);
         WIl.setBackground(Color.WHITE);
         WIl.setForeground(Color.GRAY);
         WIl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(WIl, "WIl", requiredLineup.get(IMatchRoleID.leftWinger));
         this.add(WIl, gbc);
         // FWr ======================================================================
         gbc.gridx = 1;
         gbc.gridy = 4;
-        JLabel FWr = new JLabel("FW", JLabel.CENTER);
+        JLabel FWr = new JLabel("FWr", JLabel.CENTER);
         FWr.setOpaque(true);
         FWr.setBackground(Color.WHITE);
         FWr.setForeground(Color.GRAY);
         FWr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(FWr, "FWr", requiredLineup.get(IMatchRoleID.rightForward));
         this.add(FWr, gbc);
         // FWc ======================================================================
         gbc.gridx = 2;
@@ -273,21 +356,23 @@ public class FeedbackPanel extends JFrame{
         FWc.setBackground(Color.WHITE);
         FWc.setForeground(Color.GRAY);
         FWc.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(FWc, "FW", requiredLineup.get(IMatchRoleID.centralForward));
         this.add(FWc, gbc);
         // FWl ======================================================================
         gbc.gridx = 3;
         gbc.gridy = 4;
-        JLabel FWl = new JLabel("FW", JLabel.CENTER);
+        JLabel FWl = new JLabel("FWl", JLabel.CENTER);
         FWl.setOpaque(true);
         FWl.setBackground(Color.WHITE);
         FWl.setForeground(Color.GRAY);
         FWl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+        formatPlayerBox(FWl, "FWl", requiredLineup.get(IMatchRoleID.leftForward));
         this.add(FWl, gbc);
         // ==========================================================================================
 
         // ========================================================================
-        gbc.fill =  GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(30,5,0,5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(30, 5, 0, 5);
         gbc.gridwidth = 5;
         gbc.gridx = 0;
         gbc.gridy = 5;
@@ -297,7 +382,7 @@ public class FeedbackPanel extends JFrame{
 
         // Copy Paste Area  ==========================================================================
 //        gbc.fill =  GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(10,5,0,10);
+        gbc.insets = new Insets(10, 5, 0, 10);
         gbc.gridwidth = 5;
         gbc.ipadx = 0;
         gbc.ipady = 100;
@@ -316,37 +401,34 @@ public class FeedbackPanel extends JFrame{
         gbc.gridx = 0;
         gbc.gridy = 7;
 
-        MatchRating mrHOPredictionRating = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0);
-        RatingComparisonPanel HOPredictionRating = new RatingComparisonPanel("HO", mrHOPredictionRating);
-
-        MatchRating mrHTmatchRating = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0);
-        RatingComparisonPanel HTPredictionRating = new RatingComparisonPanel("HT", mrHTmatchRating);
-
-        RatingComparisonPanel DeltaPredictionRating = new RatingComparisonPanel("Delta", mrHOPredictionRating.minus(mrHTmatchRating));
-//        this.add(DeltaPredictionRating, gbc);
+        HOPredictionRating = new RatingComparisonPanel("HO");
+        HTPredictionRating = new RatingComparisonPanel("HT");
+        DeltaPredictionRating = new RatingComparisonPanel("Delta");
 
         JPanel content = new JPanel();
         content.add(HOPredictionRating);
         content.add(HTPredictionRating);
         content.add(DeltaPredictionRating);
 
-//        JFrame f = new RatingComparisonDialog(mrHOPredictionRating, mrHTmatchRating);
         this.add(content, gbc);
 
         // =================BUTTONS    ===============================================================================================
 
         gbc.fill = GridBagConstraints.NONE;
-        gbc.insets = new Insets(0,5,10,5);
+        gbc.insets = new Insets(0, 5, 10, 5);
         gbc.ipady = 0;
         gbc.gridx = 1;
         gbc.gridy = 8;
-        jbRefresh =new JButton("Refresh");
+        jbRefresh = new JButton("Refresh");
         jbRefresh.addActionListener(e -> refresh());
         this.add(jbRefresh, gbc);
 
         gbc.gridx = 3;
-        jbSend =new JButton("Send");
-        jbSend.addActionListener(e -> sendToserver()); //TODO: create the function sendToserver
+        jbSend = new JButton("Send");
+        jbSend.addActionListener(e -> sendToServer());
+        formatSendButton();
+
+
         this.add(jbSend, gbc);
 
         setSize(900, 800);
@@ -355,25 +437,10 @@ public class FeedbackPanel extends JFrame{
         setVisible(true);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
-
     }
 
     private class SimpleLineup {
-
-        HashMap<Integer, Byte> lineup;
-
-        public SimpleLineup(HashMap<Integer, Byte> _lineup){
-            lineup = _lineup;
-        }
-
-        public SimpleLineup(){
-            lineup = new HashMap<> ();
-        }
-
-        public void addPlayer(int position, byte _matchOrder){
-            lineup.put(position, _matchOrder);
-        }
-
-
+        String lineupName;
+        Map<Integer, Byte> lineup;
     }
 }
