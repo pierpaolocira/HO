@@ -5,6 +5,7 @@ import core.model.HOVerwaltung;
 import core.model.Ratings;
 import core.model.player.IMatchRoleID;
 import core.model.player.MatchRoleID;
+import core.util.UTF8Control;
 import module.lineup.Lineup;
 import module.lineup.RatingComparisonPanel;
 import module.teamAnalyzer.vo.MatchRating;
@@ -15,9 +16,10 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 public class FeedbackPanel extends JFrame{
@@ -45,6 +47,141 @@ public class FeedbackPanel extends JFrame{
         refresh();
     }
 
+    public static MatchRating parseHTRating(String input) {
+        Pattern pattern;
+        Matcher matcher;
+        String regex;
+        MatchRating result = new MatchRating();
+
+        if (input.equals("")) return result;
+
+        // Parsing HT ratings values ============================================================
+        regex = "(?<=\\])([0-9\\.]+)(?=\\[)";
+        pattern = Pattern.compile(regex, Pattern.MULTILINE);
+        List<Double> allRatings;
+
+        try {
+            matcher = pattern.matcher(input);
+            allRatings = new ArrayList<>();
+            while (matcher.find()) {
+                allRatings.add(Double.parseDouble(matcher.group(0)));
+            }
+        } catch (Exception e) {
+            // Error while parsing HT ratings values ============================================================
+            String message = HOVerwaltung.instance().getLanguageString("feedbackplugin.ParseHTRatingError");
+            JOptionPane.showMessageDialog(null, message, "", JOptionPane.ERROR_MESSAGE);
+            return result;
+        }
+
+        if (allRatings.size() != 7) {
+            // We haven't found 7 ratings as expected  ============================================================
+            String message = HOVerwaltung.instance().getLanguageString("feedbackplugin.ParseHTRatingError");
+            JOptionPane.showMessageDialog(null, message, "", JOptionPane.ERROR_MESSAGE);
+            return result;
+        }
+
+
+        // Parsing other attributes ============================================================
+
+        List<String> allKeys = new ArrayList<>();
+        List<String> allValues = new ArrayList<>();
+
+        // get all the keys
+        regex = "(?<=\\[b\\])(.*?)(?=\\[\\/b\\])";
+        pattern = Pattern.compile(regex, Pattern.MULTILINE | Pattern.DOTALL);
+
+        try {
+            matcher = pattern.matcher(input);
+
+            while (matcher.find()) {
+                allKeys.add(matcher.group(0));
+            }
+        } catch (Exception e) {
+            // Error while parsing other attributes ============================================================
+            String message = HOVerwaltung.instance().getLanguageString("feedbackplugin.ParseHTRatingError");
+            JOptionPane.showMessageDialog(null, message, "", JOptionPane.ERROR_MESSAGE);
+            return result;
+        }
+
+        if (allKeys.size() != 5) {
+            // We haven't found 5 attributes as expected  ============================================================
+            String message = HOVerwaltung.instance().getLanguageString("feedbackplugin.ParseHTRatingError");
+            JOptionPane.showMessageDialog(null, message, "", JOptionPane.ERROR_MESSAGE);
+            return result;
+        }
+
+
+        String thisKey, nextKey;
+
+        for (int i = 0; i < 4; i++) {
+
+        thisKey = allKeys.get(i);
+        nextKey = allKeys.get(i+1);
+
+        regex = "(?<=" + thisKey + ")(.*)(?=" + nextKey + ")";
+        pattern = Pattern.compile(regex, Pattern.MULTILINE | Pattern.DOTALL);
+        matcher = pattern.matcher(input);
+        matcher.find();
+        allValues.add(matcher.group(0));
+        }
+
+        thisKey = allKeys.get(4);
+        regex = "(?<=" + thisKey + ")(.*)";
+        pattern = Pattern.compile(regex, Pattern.MULTILINE | Pattern.DOTALL);
+        matcher = pattern.matcher(input);
+        matcher.find();
+        allValues.add(matcher.group(0));
+
+        HashMap<String, String> otherAttributes = new HashMap<>();
+
+        for (int i = 0; i < 5; i++) {
+            otherAttributes.put(allKeys.get(i).toLowerCase(), allValues.get(i).replaceAll("[\\[\\/b\\]|:|\\s]","").toLowerCase());
+        }
+
+        String attitude = getTerms(otherAttributes, "ls.team.teamattitude");
+        String tactic = getTerms(otherAttributes, "ls.team.tactic");
+        String style_of_play = getTerms(otherAttributes, "ls.team.styleofPlay");
+
+
+        // We set the ratings ============================================================
+        result.setRightDefense(allRatings.get(0));
+        result.setCentralDefense(allRatings.get(0));
+        result.setLeftDefense(allRatings.get(0));
+        result.setMidfield(allRatings.get(0));
+        result.setRightAttack(allRatings.get(0));
+        result.setCentralAttack(allRatings.get(0));
+        result.setLeftAttack(allRatings.get(0));
+        result.setAttitude(attitude);
+        result.settacticType(tactic); // TODO; implement this in MatchRating.java
+        result.setStyle_of_play(style_of_play); // TODO; implement this in MatchRating.java
+        return result;
+    }
+
+
+    private static String getTerms(HashMap<String, String> map, String term)
+    {
+        String result = "";
+        ResourceBundle tempBundle = ResourceBundle.getBundle("sprache.English", new UTF8Control());
+        String english_term = tempBundle.getString(term).toLowerCase();
+        String english_term_short = english_term.substring(0, 6);
+        String local_term = HOVerwaltung.instance().getLanguageString(term).toLowerCase();
+        String local_term_short = local_term.substring(0, 5);
+
+        for (String _term : Arrays.asList(local_term, local_term_short, english_term, english_term_short)) {
+            if (map.containsKey(_term))
+            {
+                result = map.get(_term);
+                break;
+            }
+        }
+
+        return result;
+
+    }
+
+
+    //TODO: create checkHTLineup and verify attitude, tactic, styleofplay
+    //TODO passer aussi attitude, tactic, styleofplay and tacticskill
 
     private boolean checkHOLineup(){
         int positionHO, orderHO;
@@ -75,11 +212,18 @@ public class FeedbackPanel extends JFrame{
     }
 
 
-    private void sendToServer() { // TODO: to be implemented
-
+    private void sendToServer() {
+        // TODO: to be implemented
+        // TODO passer aussi attitude, tactic, styleofplay   => from HT
+        //  tacticskill  => from HO
+        // TODO: passer lineupName
+        // TODO: passer lineup
+        // TODO: passer HT ratings
+        // TODO: implementer warning based on comparison HO vs HT ???
     }
 
 
+    //TODO aussi indiquer attitude, tactic dans les requirements
     private boolean fetchRequiredLineup() {
 
             try {
@@ -168,8 +312,7 @@ public class FeedbackPanel extends JFrame{
         HORatings = HOVerwaltung.instance().getModel().getLineup().getRatings();
         HOLineup = HOVerwaltung.instance().getModel().getLineup();
 
-        // TODO: Parse HT Rating
-        HTRatings = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        HTRatings = parseHTRating(jtaCopyPaste.getText());
 
         if (bFetchLineupSuccess) {
             isHOLineupValid = checkHOLineup();
@@ -180,28 +323,6 @@ public class FeedbackPanel extends JFrame{
         HTPredictionRating.setMatchRating(HTRatings);
         DeltaPredictionRating.setMatchRating(HOPredictionRating.getMatchRating().minus(HTPredictionRating.getMatchRating()));
         refreshRatingComparisonPanel();
-
-
-
-//        requiredLineup.forEach((key,value) -> System.out.println(key + " = " + value));
-
-//
-
-
-
-//        double LD = oRatings.getLeftDefense().get(0);
-//        double CD = oRatings.getCentralDefense().get(0);
-//        double RD = oRatings.getRightDefense().get(0);
-//        double MF = oRatings.getMidfield().get(0);
-//        double LA = oRatings.getLeftAttack().get(0);
-//        double CA = oRatings.getCentralAttack().get(0);
-//        double RA = oRatings.getRightAttack().get(0);
-//
-//        MatchRating mrHOPredictionRating = new MatchRating(LD, CD, RD, MF, LA, CA, RA, 0, 0);
-//        MatchRating mrHTmatchRating = new MatchRating(0, 0, 0, 0, 0, 0, 0, 0, 0); //FIXME
-//
-//        RatingComparisonPanel HOPredictionRating = new RatingComparisonPanel("HO", mrHOPredictionRating);
-
     }
 
     private void initComponents() {

@@ -23,7 +23,21 @@ public class MatchRating {
     private int tacticType;
     private double HatStats;
     private double LoddarStat;
+    private int attitude;
+    private int style_of_play;
 
+    public void setAttitude(String attitude) {
+        switch(attitude) {
+            case "normal":
+                this.attitude = 0;
+                break;
+            case "pic":
+                this.attitude = -1;
+                break;
+            case "mots":
+                this.attitude = 1;
+        }
+    }
 
     public MatchRating() {}
     public MatchRating(Map<String, String> matchRating) {
