@@ -51,7 +51,7 @@ def validateLineup(requiredLineup):
                 raise ValueError(f"position {position} is not yet handled")
 
 
-def createJson(lineupName, requiredLineup):
+def createJson(lineupName, requiredLineup, attitude, tactic):
     validateLineup(requiredLineup)
     json_data = {}
     lineup = {}
@@ -61,20 +61,23 @@ def createJson(lineupName, requiredLineup):
 
     json_data["lineupName"] = lineupName
     json_data["lineup"] = lineup
+    json_data["attitude"] = attitude
+    json_data["tatic"] = tactic
 
-    with open(r"D:\TEMP\feedback.json", "w") as write_file:
+    # with open(r"D:\TEMP\feedback.json", "w") as write_file:
+    #     json.dump(json_data, write_file, indent=4)
+    with open(r"docs/feedback.json", "w") as write_file:
         json.dump(json_data, write_file, indent=4)
-
 
 
 requiredLineup = []
 
 requiredLineup.append((Position.GK, MatchOrder.NORMAL, True))
-requiredLineup.append((Position.WBr, MatchOrder.DEFENSIVE, True))
-requiredLineup.append((Position.WIl, MatchOrder.TOWARDS_MIDDLE, True))
-requiredLineup.append((Position.FWl, MatchOrder.TOWARDS_WING, True))
+requiredLineup.append((Position.WBr, MatchOrder.DEFENSIVE, False))
+requiredLineup.append((Position.WIl, MatchOrder.TOWARDS_MIDDLE, False))
+requiredLineup.append((Position.FWl, MatchOrder.TOWARDS_WING, False))
 
-createJson("GK", requiredLineup)
+createJson("GK", requiredLineup, "Normal", "Normal")
 
 
 

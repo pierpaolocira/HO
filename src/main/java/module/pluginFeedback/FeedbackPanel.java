@@ -5,6 +5,7 @@ import core.model.HOVerwaltung;
 import core.model.Ratings;
 import core.model.player.IMatchRoleID;
 import core.model.player.MatchRoleID;
+import core.model.match.Matchdetails;
 import core.util.UTF8Control;
 import module.lineup.Lineup;
 import module.lineup.RatingComparisonPanel;
@@ -26,15 +27,15 @@ public class FeedbackPanel extends JFrame{
 
     GridBagLayout layout;
     JLabel lineupRecommendation;
-    JLabel GK, WBr;
+    JLabel GK, WBr, CDr, CDc, CDl, WBl, WIr, IMr, IMc, IMl, WIl, FWr, FWc, FWl;
     JTextArea jtaCopyPaste;
     JButton jbRefresh, jbSend;
-    Map<Integer, Byte> requiredLineup = new HashMap<>();
-    Lineup HOLineup;
+    SimpleLineup requirements;
+    static Lineup HOLineup;
     Ratings HORatings;
     MatchRating HTRatings;
     Boolean bFetchLineupSuccess;
-    Boolean isHOLineupValid = false;
+    Boolean areLineupsValid = false;
     RatingComparisonPanel HOPredictionRating, HTPredictionRating, DeltaPredictionRating;
 
     public FeedbackPanel() {
@@ -42,7 +43,7 @@ public class FeedbackPanel extends JFrame{
         HOLineup = HOVerwaltung.instance().getModel().getLineup();
 
         bFetchLineupSuccess = fetchRequiredLineup();
-        if (bFetchLineupSuccess) isHOLineupValid = checkHOLineup();
+
         initComponents();
         refresh();
     }
@@ -134,58 +135,80 @@ public class FeedbackPanel extends JFrame{
 
         HashMap<String, String> otherAttributes = new HashMap<>();
 
+        String temp;
+
         for (int i = 0; i < 5; i++) {
-            otherAttributes.put(allKeys.get(i).toLowerCase(), allValues.get(i).replaceAll("[\\[\\/b\\]|:|\\s]","").toLowerCase());
+            temp = allValues.get(i).replace("[/b]", "");
+            temp = temp.replace("[b]", "");
+            temp = temp.replaceAll("[:|\\s]","");
+            otherAttributes.put(allKeys.get(i).toLowerCase(), temp.toLowerCase());
         }
 
         String attitude = getTerms(otherAttributes, "ls.team.teamattitude");
-        String tactic = getTerms(otherAttributes, "ls.team.tactic");
+        String tacticType = getTerms(otherAttributes, "ls.team.tactics");
         String style_of_play = getTerms(otherAttributes, "ls.team.styleofPlay");
 
+        int iTacticType = MatchRating.TacticTypeStringToInt(tacticType);
+        int iTacticlevel = MatchRating.float2HTint(HOLineup.getTacticLevel(iTacticType));
+        int iAttitude = MatchRating.AttitudeStringToInt(attitude);
+        int iStyle_of_play = MatchRating.StyleOfPlayStringToInt(style_of_play);
 
-        // We set the ratings ============================================================
-        result.setRightDefense(allRatings.get(0));
-        result.setCentralDefense(allRatings.get(0));
-        result.setLeftDefense(allRatings.get(0));
-        result.setMidfield(allRatings.get(0));
-        result.setRightAttack(allRatings.get(0));
-        result.setCentralAttack(allRatings.get(0));
-        result.setLeftAttack(allRatings.get(0));
-        result.setAttitude(attitude);
-        result.settacticType(tactic); // TODO; implement this in MatchRating.java
-        result.setStyle_of_play(style_of_play); // TODO; implement this in MatchRating.java
+        if ((iTacticType == MatchRating.ERROR) || (iAttitude == MatchRating.ERROR) ||
+                (iStyle_of_play == MatchRating.ERROR) ){
+            String message = HOVerwaltung.instance().getLanguageString("feedbackplugin.ParseHTRatingError");
+            JOptionPane.showMessageDialog(null, message, "", JOptionPane.ERROR_MESSAGE);
+            return result;
+        }
+
+        result = new MatchRating(allRatings.get(2), allRatings.get(1), allRatings.get(0), allRatings.get(3), allRatings.get(6),
+                allRatings.get(5), allRatings.get(4), iAttitude, iTacticType, iTacticlevel, iStyle_of_play);
+
         return result;
     }
 
 
     private static String getTerms(HashMap<String, String> map, String term)
     {
-        String result = "";
         ResourceBundle tempBundle = ResourceBundle.getBundle("sprache.English", new UTF8Control());
-        String english_term = tempBundle.getString(term).toLowerCase();
-        String english_term_short = english_term.substring(0, 6);
-        String local_term = HOVerwaltung.instance().getLanguageString(term).toLowerCase();
-        String local_term_short = local_term.substring(0, 5);
 
-        for (String _term : Arrays.asList(local_term, local_term_short, english_term, english_term_short)) {
+        String english_term = tempBundle.getString(term).toLowerCase();
+        String local_term = HOVerwaltung.instance().getLanguageString(term).toLowerCase();
+        for (String _term : Arrays.asList(local_term, english_term)) {
             if (map.containsKey(_term))
             {
-                result = map.get(_term);
-                break;
+                return map.get(_term);
             }
         }
 
-        return result;
+        // language is not English and translation does not exist, we will try to parse using a proxy
+        if (term == "ls.team.tactics") {
+            String local_proxy_term = HOVerwaltung.instance().getLanguageString("ls.team.tactic").toLowerCase().substring(0, 5);
+            String short_key;
+            for (Map.Entry<String, String> entry : map.entrySet()) {
+                short_key = entry.getKey().substring(0, 5);
+                if (short_key.equals(local_proxy_term)) {
+                    return entry.getValue();
+                }
+            }
+        }
+
+        return "";
 
     }
 
 
-    //TODO: create checkHTLineup and verify attitude, tactic, styleofplay
-    //TODO passer aussi attitude, tactic, styleofplay and tacticskill
-
-    private boolean checkHOLineup(){
+    private boolean checkHOandHTLineups(){
         int positionHO, orderHO;
         boolean isAligned, positionIsRequired;
+
+
+        // return false if attitude not properly set
+        if ( (HOLineup.getAttitude() != HTRatings.getAttitude()) ||
+             (HOLineup.getAttitude() != MatchRating.AttitudeStringToInt(requirements.attitude))  ) return false;
+
+        // return false if tactic not properly set
+        if ( (HOLineup.getTacticType() != HTRatings.getTacticType()) ||
+             (HOLineup.getTacticType() != MatchRating.TacticTypeStringToInt(requirements.tatic))  ) return false;
 
         // return false if HOLineup not fully included in required Lineup
         for (IMatchRoleID obj: HOLineup.getPositionen()) {
@@ -196,14 +219,14 @@ public class FeedbackPanel extends JFrame{
 
             if (isAligned)
             {
-                positionIsRequired = requiredLineup.containsKey(positionHO);
+                positionIsRequired = requirements.lineup.containsKey(positionHO);
                 if(!positionIsRequired) return false; // Player in the lineup at a position not listed in the requirements
-                if(requiredLineup.get(positionHO) != orderHO) return false; // Player has incorrect orders
+                if(requirements.lineup.get(positionHO) != orderHO) return false; // Player has incorrect orders
             }
             }
 
         // return false if required Lineup not fully included in HO Lineup
-        for (Map.Entry<Integer, Byte> entry : requiredLineup.entrySet()) {
+        for (Map.Entry<Integer, Byte> entry : requirements.lineup.entrySet()) {
             HOLineup.getPositionById(entry.getKey()).getTaktik();
             if( (HOLineup.getPositionById(entry.getKey()).getTaktik() != entry.getValue()) ) return false;
         }
@@ -213,17 +236,20 @@ public class FeedbackPanel extends JFrame{
 
 
     private void sendToServer() {
-        // TODO: to be implemented
-        // TODO passer aussi attitude, tactic, styleofplay   => from HT
-        //  tacticskill  => from HO
-        // TODO: passer lineupName
-        // TODO: passer lineup
-        // TODO: passer HT ratings
+//        int tacticType = HTRatings.getTacticType();
+//        int tacticSkill = HTRatings.getTacticSkill();
+//        int styleofplay = HTRatings.getStyle_of_play();
+//        int attitude = HTRatings.getAttitude();
+//        String linupName = requirements.lineupName;
+//        Lineup lineup = HOLineup;
+//        pass 'Lineup' from 'HOLineup';
+//        pass 'ratings', 'tacticType', 'tacticSkill', 'styleofplay',  'attitude' from  'HTRatings'
+
         // TODO: implementer warning based on comparison HO vs HT ???
+        // TODO: call function send to server()
     }
 
 
-    //TODO aussi indiquer attitude, tactic dans les requirements
     private boolean fetchRequiredLineup() {
 
             try {
@@ -233,8 +259,7 @@ public class FeedbackPanel extends JFrame{
                 connection.connect();
 //                BufferedReader json = new BufferedReader(new java.io.InputStreamReader(connection.getInputStream()));
                 BufferedReader json = new BufferedReader(new FileReader("D:\\Temp\\feedback.json"));
-                SimpleLineup temp =  new Gson().fromJson(json, SimpleLineup.class);
-                requiredLineup = temp.lineup;
+                requirements =  new Gson().fromJson(json, SimpleLineup.class);
                 return true;
             }
 
@@ -248,7 +273,7 @@ public class FeedbackPanel extends JFrame{
     }
 
 
-    private void formatPlayerBox(JLabel jl, String pos, Byte order) // TODO treat the order, make it visible somehow in the box
+    private void formatPlayerBox(JLabel jl, String pos, Byte order)
     {
         if(order != null) {
             String s_order = pos;
@@ -263,22 +288,29 @@ public class FeedbackPanel extends JFrame{
             String up_arrow = "\uD83E\uDC79";
             String down_arrow = "\uD83E\uDC7B";
 
+            HOVerwaltung hoi = HOVerwaltung.instance();
+
+            String off = "(" + hoi.getLanguageString("ls.player.behaviour.offensive.short").toUpperCase() + ")";
+            String def = "(" + hoi.getLanguageString("ls.player.behaviour.defensive.short").toUpperCase() + ")";
+            String tm = "(" + hoi.getLanguageString("ls.player.behaviour.towardsmiddle.short").toUpperCase() + ")";
+            String tw = "(" + hoi.getLanguageString("ls.player.behaviour.towardswing.short").toUpperCase() + ")";
+
             switch(order) {
                 case IMatchRoleID.NORMAL:
                     break;
                 case IMatchRoleID.OFFENSIVE:
-                    s_order += " (OFF) " + down_arrow;
+                    s_order += " " + off + " " + down_arrow;
                     break;
                 case IMatchRoleID.DEFENSIVE:
-                    s_order += " (DEF) " + up_arrow;
+                    s_order += " " + def + " " + up_arrow;
                     break;
                 case IMatchRoleID.TOWARDS_WING:
-                    if (righSide.contains(pos)){s_order = left_arrow + " " + s_order + " (TW)";}
-                    else {s_order = s_order + " (TW) " + right_arrow;}
+                    if (righSide.contains(pos)){s_order = left_arrow + " " + s_order + " " + tw;}
+                    else {s_order = s_order + " " + tw + " " + right_arrow;}
                     break;
                 case IMatchRoleID.TOWARDS_MIDDLE:
-                    if (! righSide.contains(pos)){s_order = left_arrow + " " + s_order + " (TM)";}
-                    else {s_order = s_order + " (TW) " + right_arrow;}
+                    if (! righSide.contains(pos)){s_order = left_arrow + " " + s_order + " " + tm;}
+                    else {s_order = s_order + " " + tm + " " + right_arrow;}
                     break;
             }
             jl.setText(s_order);
@@ -289,7 +321,7 @@ public class FeedbackPanel extends JFrame{
 
     private void formatSendButton()
     {
-        if (isHOLineupValid) {
+        if (areLineupsValid) {
             jbSend.setEnabled(true);
             jbSend.setToolTipText(HOVerwaltung.instance().getLanguageString("feedbackplugin.jbSendActivated"));
         }
@@ -311,24 +343,25 @@ public class FeedbackPanel extends JFrame{
         // Refresh HO Lineup and ratings
         HORatings = HOVerwaltung.instance().getModel().getLineup().getRatings();
         HOLineup = HOVerwaltung.instance().getModel().getLineup();
-
         HTRatings = parseHTRating(jtaCopyPaste.getText());
-
-        if (bFetchLineupSuccess) {
-            isHOLineupValid = checkHOLineup();
-            formatSendButton();
-        }
-
         HOPredictionRating.setMatchRating(HORatings);
         HTPredictionRating.setMatchRating(HTRatings);
         DeltaPredictionRating.setMatchRating(HOPredictionRating.getMatchRating().minus(HTPredictionRating.getMatchRating()));
         refreshRatingComparisonPanel();
+
+        if (bFetchLineupSuccess) {
+            areLineupsValid = checkHOandHTLineups();
+            formatSendButton(); // it is possible to send data only if all criteria are met
+        }
+
     }
+
 
     private void initComponents() {
 
+        HOVerwaltung hoi = HOVerwaltung.instance();
         GridBagConstraints gbc = new GridBagConstraints();
-        setTitle("Feedback Plugin");
+        setTitle(hoi.getLanguageString("Lineup.Feedback.Panel.Title"));
         layout = new GridBagLayout();
         this.setLayout(layout);
 
@@ -338,7 +371,10 @@ public class FeedbackPanel extends JFrame{
         gbc.gridwidth = 5;
         gbc.gridx = 0;
         gbc.gridy = 0;
-        lineupRecommendation = new JLabel("<html><font color='red' weight='bold'>1.</font> Please set the <b>same lineup both in HO and in HT</b>, as per the following recommendation:</html>");
+        String start = "<html><b><font color='red'>1.</font></b> ";
+        String end = ":</html>";
+        String msg = hoi.getLanguageString("Lineup.Feedback.Panel.Instruction1");
+        lineupRecommendation = new JLabel(start + msg + end);
         this.add(lineupRecommendation, gbc);
         // ==========================================================================================
 
@@ -350,166 +386,213 @@ public class FeedbackPanel extends JFrame{
         gbc.weightx = 1;
         gbc.gridx = 2;
         gbc.gridy = 1;
-        GK = new JLabel("GK", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.gk");
+        GK = new JLabel(msg, JLabel.CENTER);
         GK.setOpaque(true);
         GK.setBackground(Color.WHITE);
         GK.setForeground(Color.GRAY);
         GK.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(GK, "GK", requiredLineup.get(IMatchRoleID.keeper));
+        formatPlayerBox(GK, msg, requirements.lineup.get(IMatchRoleID.keeper));
         this.add(GK, gbc);
         // WBr ======================================================================
         gbc.insets = new Insets(5, 5, 5, 5);  //top padding
         gbc.gridx = 0;
         gbc.gridy = 2;
-        WBr = new JLabel("WBr", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.rb");
+        WBr = new JLabel(msg, JLabel.CENTER);
         WBr.setOpaque(true);
         WBr.setBackground(Color.WHITE);
         WBr.setForeground(Color.GRAY);
         WBr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(WBr, "WBr", requiredLineup.get(IMatchRoleID.rightBack));
+        formatPlayerBox(WBr, msg, requirements.lineup.get(IMatchRoleID.rightBack));
         this.add(WBr, gbc);
         // CDr ======================================================================
         gbc.gridx = 1;
         gbc.gridy = 2;
-        JLabel CDr = new JLabel("CDr", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.rcd");
+        CDr = new JLabel(msg, JLabel.CENTER);
         CDr.setOpaque(true);
         CDr.setBackground(Color.WHITE);
         CDr.setForeground(Color.GRAY);
         CDr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(CDr, "CDr", requiredLineup.get(IMatchRoleID.rightCentralDefender));
+        formatPlayerBox(CDr, msg, requirements.lineup.get(IMatchRoleID.rightCentralDefender));
         this.add(CDr, gbc);
         // CDc ======================================================================
         gbc.gridx = 2;
         gbc.gridy = 2;
-        JLabel CDc = new JLabel("CD", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.mcd");
+        CDc = new JLabel(msg, JLabel.CENTER);
         CDc.setOpaque(true);
         CDc.setBackground(Color.WHITE);
         CDc.setForeground(Color.GRAY);
         CDc.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(CDc, "CD", requiredLineup.get(IMatchRoleID.middleCentralDefender));
+        formatPlayerBox(CDc, msg, requirements.lineup.get(IMatchRoleID.middleCentralDefender));
         this.add(CDc, gbc);
         // CDl ======================================================================
         gbc.gridx = 3;
         gbc.gridy = 2;
-        JLabel CDl = new JLabel("CDl", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.lcd");
+        CDl = new JLabel(msg, JLabel.CENTER);
         CDl.setOpaque(true);
         CDl.setBackground(Color.WHITE);
         CDl.setForeground(Color.GRAY);
         CDl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(CDl, "CDl", requiredLineup.get(IMatchRoleID.leftCentralDefender));
+        formatPlayerBox(CDl, msg, requirements.lineup.get(IMatchRoleID.leftCentralDefender));
         this.add(CDl, gbc);
         // WBl ======================================================================
         gbc.gridx = 4;
         gbc.gridy = 2;
-        JLabel WBl = new JLabel("WBl", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.lb");
+        WBl = new JLabel(msg, JLabel.CENTER);
         WBl.setOpaque(true);
         WBl.setBackground(Color.WHITE);
         WBl.setForeground(Color.GRAY);
         WBl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(WBl, "WBl", requiredLineup.get(IMatchRoleID.leftBack));
+        formatPlayerBox(WBl, msg, requirements.lineup.get(IMatchRoleID.leftBack));
         this.add(WBl, gbc);
         // WIr ======================================================================
         gbc.insets = new Insets(5, 5, 5, 5);  //top padding
         gbc.gridx = 0;
         gbc.gridy = 3;
-        JLabel WIr = new JLabel("WIr", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.rw");
+        WIr = new JLabel(msg, JLabel.CENTER);
         WIr.setOpaque(true);
         WIr.setBackground(Color.WHITE);
         WIr.setForeground(Color.GRAY);
         WIr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(WIr, "WIr", requiredLineup.get(IMatchRoleID.rightWinger));
+        formatPlayerBox(WIr, msg, requirements.lineup.get(IMatchRoleID.rightWinger));
         this.add(WIr, gbc);
         // IMr ======================================================================
         gbc.gridx = 1;
         gbc.gridy = 3;
-        JLabel IMr = new JLabel("IMr", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.rim");
+        IMr = new JLabel(msg, JLabel.CENTER);
         IMr.setOpaque(true);
         IMr.setBackground(Color.WHITE);
         IMr.setForeground(Color.GRAY);
         IMr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(IMr, "IMr", requiredLineup.get(IMatchRoleID.rightInnerMidfield));
+        formatPlayerBox(IMr, msg, requirements.lineup.get(IMatchRoleID.rightInnerMidfield));
         this.add(IMr, gbc);
         // IMc ======================================================================
         gbc.gridx = 2;
         gbc.gridy = 3;
-        JLabel IMc = new JLabel("IM", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.cim");
+        IMc = new JLabel(msg, JLabel.CENTER);
         IMc.setOpaque(true);
         IMc.setBackground(Color.WHITE);
         IMc.setForeground(Color.GRAY);
         IMc.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(IMc, "IM", requiredLineup.get(IMatchRoleID.centralInnerMidfield));
+        formatPlayerBox(IMc, msg, requirements.lineup.get(IMatchRoleID.centralInnerMidfield));
         this.add(IMc, gbc);
         // IMl ======================================================================
         gbc.gridx = 3;
         gbc.gridy = 3;
-        JLabel IMl = new JLabel("IMl", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.lim");
+        IMl = new JLabel(msg, JLabel.CENTER);
         IMl.setOpaque(true);
         IMl.setBackground(Color.WHITE);
         IMl.setForeground(Color.GRAY);
         IMl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(IMl, "IMl", requiredLineup.get(IMatchRoleID.leftInnerMidfield));
+        formatPlayerBox(IMl, msg, requirements.lineup.get(IMatchRoleID.leftInnerMidfield));
         this.add(IMl, gbc);
         // WIl ======================================================================
         gbc.gridx = 4;
         gbc.gridy = 3;
-        JLabel WIl = new JLabel("WIl", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.lw");
+        WIl = new JLabel(msg, JLabel.CENTER);
         WIl.setOpaque(true);
         WIl.setBackground(Color.WHITE);
         WIl.setForeground(Color.GRAY);
         WIl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(WIl, "WIl", requiredLineup.get(IMatchRoleID.leftWinger));
+        formatPlayerBox(WIl, msg, requirements.lineup.get(IMatchRoleID.leftWinger));
         this.add(WIl, gbc);
         // FWr ======================================================================
         gbc.gridx = 1;
         gbc.gridy = 4;
-        JLabel FWr = new JLabel("FWr", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.rfw");
+        FWr = new JLabel(msg, JLabel.CENTER);
         FWr.setOpaque(true);
         FWr.setBackground(Color.WHITE);
         FWr.setForeground(Color.GRAY);
         FWr.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(FWr, "FWr", requiredLineup.get(IMatchRoleID.rightForward));
+        formatPlayerBox(FWr, msg, requirements.lineup.get(IMatchRoleID.rightForward));
         this.add(FWr, gbc);
         // FWc ======================================================================
         gbc.gridx = 2;
         gbc.gridy = 4;
-        JLabel FWc = new JLabel("FW", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.cfw");
+        FWc = new JLabel(msg, JLabel.CENTER);
         FWc.setOpaque(true);
         FWc.setBackground(Color.WHITE);
         FWc.setForeground(Color.GRAY);
         FWc.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(FWc, "FW", requiredLineup.get(IMatchRoleID.centralForward));
+        formatPlayerBox(FWc, msg, requirements.lineup.get(IMatchRoleID.centralForward));
         this.add(FWc, gbc);
         // FWl ======================================================================
         gbc.gridx = 3;
         gbc.gridy = 4;
-        JLabel FWl = new JLabel("FWl", JLabel.CENTER);
+        msg = hoi.getLanguageString("subs.lfw");
+        FWl = new JLabel(msg, JLabel.CENTER);
         FWl.setOpaque(true);
         FWl.setBackground(Color.WHITE);
         FWl.setForeground(Color.GRAY);
         FWl.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        formatPlayerBox(FWl, "FWl", requiredLineup.get(IMatchRoleID.leftForward));
+        formatPlayerBox(FWl, msg, requirements.lineup.get(IMatchRoleID.leftForward));
         this.add(FWl, gbc);
         // ==========================================================================================
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        gbc.insets = new Insets(20, 10, 0, 10);
+        start = "<html><b><u>";
+
+        String jlTactics_message = hoi.getLanguageString("ls.team.tactic");
+        String jlTeamAttitude_message = hoi.getLanguageString("ls.team.teamattitude");
+
+        if (bFetchLineupSuccess)
+        {
+            int iTactc = MatchRating.TacticTypeStringToInt(requirements.tatic);
+            int iAttitude = MatchRating.TacticTypeStringToInt(requirements.attitude);
+            core.model.match.Matchdetails md = new core.model.match.Matchdetails();
+            jlTactics_message = start + jlTactics_message + ":</u></b> " + md.getNameForEinstellung(iTactc)+ "</html>";
+            jlTeamAttitude_message = start + jlTeamAttitude_message + ":</u></b> " + md.getNameForEinstellung(iAttitude) + "</html>";
+        }
+        else
+        {
+            jlTactics_message += "?</html>";
+            jlTeamAttitude_message += "?</html>";
+        }
+
+        JLabel jlTactics = new JLabel(jlTactics_message, JLabel.LEFT);
+        this.add(jlTactics, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 6;
+        gbc.insets = new Insets(10, 10, 0, 10);
+        JLabel jlTeamAttitude = new JLabel(jlTeamAttitude_message, JLabel.LEFT);
+        this.add(jlTeamAttitude, gbc);
 
         // ========================================================================
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(30, 5, 0, 5);
         gbc.gridwidth = 5;
         gbc.gridx = 0;
-        gbc.gridy = 5;
-        lineupRecommendation = new JLabel("<html><font color='red' weight='bold'>2.</font> Paste the prediction ratings provided by HT</html>");
+        gbc.gridy = 7;
+        start = "<html><b><font color='red'>2.</font></b> ";
+        msg = hoi.getLanguageString("Lineup.Feedback.Panel.Instruction2");
+        end = "</html>";
+
+        lineupRecommendation = new JLabel(start + msg + end);
         this.add(lineupRecommendation, gbc);
         // ==========================================================================================
 
         // Copy Paste Area  ==========================================================================
-//        gbc.fill =  GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(10, 5, 0, 10);
         gbc.gridwidth = 5;
         gbc.ipadx = 0;
         gbc.ipady = 100;
         gbc.weightx = 0;
         gbc.gridx = 0;
-        gbc.gridy = 6;
+        gbc.gridy = 8;
         jtaCopyPaste = new JTextArea();
         jtaCopyPaste.setFont(new Font("Serif", Font.ITALIC, 10));
         jtaCopyPaste.setLineWrap(true);
@@ -520,11 +603,12 @@ public class FeedbackPanel extends JFrame{
 
         // ================ PREDICTION RATING  =========================================================================
         gbc.gridx = 0;
-        gbc.gridy = 7;
+        gbc.gridy = 9;
+        gbc.insets = new Insets(30, 5, 0, 10);
 
         HOPredictionRating = new RatingComparisonPanel("HO");
         HTPredictionRating = new RatingComparisonPanel("HT");
-        DeltaPredictionRating = new RatingComparisonPanel("Delta");
+        DeltaPredictionRating = new RatingComparisonPanel(hoi.getLanguageString("Delta"));
 
         JPanel content = new JPanel();
         content.add(HOPredictionRating);
@@ -534,18 +618,17 @@ public class FeedbackPanel extends JFrame{
         this.add(content, gbc);
 
         // =================BUTTONS    ===============================================================================================
-
         gbc.fill = GridBagConstraints.NONE;
         gbc.insets = new Insets(0, 5, 10, 5);
         gbc.ipady = 0;
         gbc.gridx = 1;
-        gbc.gridy = 8;
-        jbRefresh = new JButton("Refresh");
+        gbc.gridy = 10;
+        jbRefresh = new JButton(hoi.getLanguageString("Lineup.Feedback.Panel.btnRefresh"));
         jbRefresh.addActionListener(e -> refresh());
         this.add(jbRefresh, gbc);
 
         gbc.gridx = 3;
-        jbSend = new JButton("Send");
+        jbSend = new JButton("  "+ hoi.getLanguageString("Lineup.Feedback.Panel.btnSend") + "  ");
         jbSend.addActionListener(e -> sendToServer());
         formatSendButton();
 
@@ -562,6 +645,8 @@ public class FeedbackPanel extends JFrame{
 
     private class SimpleLineup {
         String lineupName;
+        String attitude;
+        String tatic;
         Map<Integer, Byte> lineup;
     }
 }
