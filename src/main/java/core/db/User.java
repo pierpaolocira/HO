@@ -1,6 +1,8 @@
 // %1916127255:de.hattrickorganizer.model%
 package core.db;
 
+import core.HO;
+import core.gui.HOMainFrame;
 import core.util.HOLogger;
 import tool.updater.UpdateHelper;
 
@@ -26,7 +28,7 @@ public class User {
 	private String driver = "org.hsqldb.jdbcDriver";
 	private String name = "singleUser";
 	private String pwd = "";
-	private String url = "jdbc:hsqldb:file:db/database";
+	private String url; // It is now initialised in the constructor, it was "jdbc:hsqldb:file:db/database";
 	private String user = "sa";
 	private int backupLevel = 3;
 	private boolean isNtTeam = false;
@@ -35,6 +37,24 @@ public class User {
 	 * Creates a new User object.
 	 */
 	private User() {
+		this.setPath(System.getProperty("user.dir") + File.separator + User.determineBasePath() + "db");
+	}
+	
+	// Issue #372: saves db in right folder on MacOS, and allow for Dev/Test/Stable to cohexist and use different databases
+	public static String determineBasePath() {
+		//if (HO.VERSION != 0d && HOMainFrame.isMac()) { // Only if HO is not running in IDE (version != 0d) and for MacOSX
+		if (HOMainFrame.isMac()) { // Only if HO is not running in IDE (version != 0d) and for MacOSX
+			String suffix = new String();
+			if (HO.isDevelopment()) {
+				suffix = "-dev";
+			}
+			else if (HO.isBeta()) {
+				suffix = "-beta";
+			}
+			return "Library/Application Support/HO"+suffix+"/";
+		} else {
+			return "";
+		}
 	}
 
 	public static List<User> getAllUser() {
@@ -127,6 +147,8 @@ public class User {
 		try {
 			File file = getFile(FILENAME);
 
+			if (!file.getParentFile().exists())
+			    file.getParentFile().mkdirs();
 			if (!file.exists()) {
 				file.createNewFile();
 			}
@@ -223,7 +245,8 @@ public class User {
 	}
 
 	private static File getFile(String fileName) {
-		return new File(System.getProperty("user.dir") + File.separator + fileName);
+		//return new File(System.getProperty("user.dir") + File.separator + fileName);
+		return new File(System.getProperty("user.dir") + File.separator + User.determineBasePath() + File.separator + fileName);
 	}
 
 	private static void parseFile(NodeList elements) {

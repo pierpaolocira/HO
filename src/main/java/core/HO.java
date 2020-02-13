@@ -12,18 +12,12 @@ import core.model.UserParameter;
 import core.training.TrainingManager;
 import core.util.ExceptionHandler;
 import core.util.HOLogger;
-//import core.util.IOUtils;
-//import java.io.BufferedReader;
 import java.io.File;
-//import java.io.InputStream;
-//import java.io.InputStreamReader;
 import javax.swing.JComboBox;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.text.NumberFormat;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Main HO starter class.
@@ -39,7 +33,6 @@ public class HO {
     public static double VERSION;  // Version is set in build.gradle and exposed to HO via the manifest
 	public static int RevisionNumber;
     private static String versionType;
-
 
 	/**
 	 * Is this a development version? Note that a "development" version can a
@@ -125,13 +118,11 @@ public class HO {
 					versionType = "RELEASE";
 					break;
 			}
-			}
-
-            else {
-                HOLogger.instance().error(HO.class, "Launched from IDE otherwise there is a bug !");
-                VERSION = 0d;
-				versionType = "DEV";
-            }
+		} else {
+            HOLogger.instance().error(HO.class, "Launched from IDE otherwise there is a bug !");
+            VERSION = 0d; // Do not change: used to detect if it is launched into an IDE
+			versionType = "DEV";
+        }
 
 		// Usermanagement Login-Dialog
 		try {
@@ -159,7 +150,7 @@ public class HO {
 			BackupHelper.backup(new File(User.getCurrentUser().getDBPath()));
 		}
 
-		// Standardparameter aus der DB holen
+		// Get standard parameters from the DB
 		interuptionsWindow.setInfoText(2, "Initialize Database");
 		DBManager.instance().loadUserParameter();
 

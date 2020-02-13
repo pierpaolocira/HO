@@ -111,7 +111,7 @@ public class Helper {
     public static boolean paneShown;
 
     /**
-     * Errechnet die Spaltenbreite für den User-Schriftgrösse
+     * Calculates the column width for the user font size
      *
      */
     public static int calcCellWidth(int width) {
